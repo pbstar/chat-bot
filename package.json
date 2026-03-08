@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json.schemastore.org/package.json",
+  "name": "chat-bot",
+  "version": "0.0.0",
+  "type": "module",
+  "description": "基于 AI 大模型的聊天机器人，支持钉钉机器人集成，具备智能对话、历史记录管理、百度搜索等功能。",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "cross-env NODE_ENV=development tsx watch -r dotenv/config src/index.ts",
+    "build": "npx rimraf dist && tsc --build --force && tsc-alias && node scripts/build.js",
+    "start": "cross-env NODE_ENV=production node -r dotenv/config dist/index.js"
+  },
+  "keywords": [],
+  "author": "",
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/node": "^22.19.7",
+    "@types/node-cron": "^3.0.11",
+    "cross-env": "^10.1.0",
+    "rimraf": "^6.0.1",
+    "terser": "^5.46.0",
+    "tsc-alias": "^1.8.11",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "axios": "^1.13.4",
+    "dayjs": "^1.11.19",
+    "dingtalk-stream": "^2.1.4",
+    "dotenv": "^17.2.3",
+    "express": "^5.2.1",
+    "mysql2": "^3.16.2",
+    "node-cron": "^4.2.1"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/pbstar/chat-bot"
+  },
+  "bugs": {
+    "url": "https://github.com/pbstar/chat-bot/issues"
+  }
+}
