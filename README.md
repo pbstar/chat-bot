@@ -31,6 +31,11 @@ chat-bot/
 │   ├── db/                     # 数据库相关
 │   │   ├── mysql.ts            # MySQL 连接池配置
 │   │   └── record.ts           # 聊天记录数据操作
+│   ├── routes/                 # 路由层
+│   │   ├── middleware/         # 中间件
+│   │   │   └── steamAuth.ts    # 开放接口认证中间件
+│   │   ├── dingtalk.ts         # 钉钉消息路由
+│   │   └── open.ts             # 开放接口路由（外部系统发消息）
 │   ├── services/               # 业务服务层
 │   │   ├── dingtalk/           # 钉钉机器人服务
 │   │   │   ├── index.ts        # 钉钉消息监听与处理
@@ -86,6 +91,7 @@ cp .env.example .env
 | 变量名                   | 说明                   | 必填          |
 | ------------------------ | ---------------------- | ------------- |
 | `PORT`                   | 服务端口               | 否，默认 1801 |
+| `OPEN_KEY`               | 开放接口密钥           | 否            |
 | `DB_HOST`                | 数据库主机             | 是            |
 | `DB_PORT`                | 数据库端口             | 否，默认 3306 |
 | `DB_USER`                | 数据库用户名           | 是            |
@@ -169,57 +175,54 @@ npm start
 - **按群组查询**：支持群聊上下文
 - **自动持久化**：所有记录保存到 MySQL
 
-## API 说明
+### 5. 开放接口（外部系统发送钉钉消息）
 
-### 内部模块
+支持外部系统通过 HTTP 接口调用发送钉钉消息。
 
-#### `chatAgent(content, records)`
+**接口地址：** `POST /api/open/send`
 
-闲聊 Agent 入口函数。
+**请求头：**
 
-**参数：**
+| 字段             | 说明         | 必填 |
+| ---------------- | ------------ | ---- |
+| `x-system-id`    | 系统标识     | 是   |
+| `x-system-token` | 系统令牌     | 是   |
+| `x-open-key`     | 开放接口密钥 | 是   |
 
-- `content`: string - 用户输入内容
-- `records`: ChatRecord[] - 历史聊天记录
+**请求体：**
 
-**返回：**
+```json
+{
+  "msgtype": "text", // 消息类型：text 或 markdown
+  "content": "消息内容" // 消息内容
+}
+```
 
-- `Promise<string[]>` - AI 回复消息数组
-
-#### `chat({ messages, tools })`
-
-豆包 AI 对话核心函数。
-
-**参数：**
-
-- `messages`: Message[] - 对话消息列表
-- `tools`: Tool[] - 可选的工具定义
-
-**返回：**
-
-- `Promise<string[]>` - AI 回复消息数组
-
-## 部署建议
-
-### 使用 PM2 部署
+**示例：**
 
 ```bash
-npm run build
-pm2 start dist/index.js --name chat-bot
+curl -X POST http://localhost:1801/api/open/send \
+  -H "Content-Type: application/json" \
+  -H "x-system-id: system1" \
+  -H "x-system-token: your_token" \
+  -H "x-open-key: your_open_key" \
+  -d '{
+    "msgtype": "text",
+    "content": "这是一条测试消息"
+  }'
 ```
 
-### Docker 部署
+**环境变量配置：**
 
-```dockerfile
-FROM node:20-alpine
-WORKDIR /app
-COPY package*.json ./
-RUN npm install --production
-COPY dist ./dist
-COPY .env ./
-EXPOSE 1801
-CMD ["node", "dist/index.js"]
+```bash
+# 开放接口密钥
+OPEN_KEY=your_open_key_here
 ```
+
+**认证说明：**
+
+- `x-open-key` 必须匹配环境变量 `OPEN_KEY`
+- `x-system-id` 和 `x-system-token` 预留用于后续扩展校验
 
 ## 注意事项
 
