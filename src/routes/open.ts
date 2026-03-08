@@ -4,7 +4,12 @@ import { send } from "@/services/dingtalk/send";
 
 const router = Router();
 router.use(steamAuthMiddleware);
-
+router.get("/", (_, res) => {
+  res.json({
+    success: true,
+    message: "欢迎使用chat-bot开放接口",
+  });
+});
 // 发送钉钉消息接口
 router.post("/send", async (req, res) => {
   try {
