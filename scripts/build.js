@@ -62,8 +62,14 @@ async function minifyJsFiles(dir) {
   }
 }
 
-copyRecursive(join(rootDir, "public"), join(distDir, "public"));
-console.log("Build copy completed!");
+// 复制 public 目录（如果存在）
+const publicDir = join(rootDir, "public");
+if (statSync(publicDir, { throwIfNoEntry: false })) {
+  copyRecursive(publicDir, join(distDir, "public"));
+  console.log("Build copy completed!");
+} else {
+  console.log("No public directory to copy.");
+}
 
 console.log("\nMinifying JavaScript files...");
 await minifyJsFiles(distDir);
