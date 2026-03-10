@@ -1,15 +1,16 @@
 # Chat Bot - 智能聊天机器人
 
-基于 AI 大模型的聊天机器人，支持钉钉机器人集成，具备智能对话、历史记录管理、百度搜索等功能。
+基于 AI 大模型的聊天机器人，支持钉钉机器人集成，具备智能对话、历史记录管理、记忆归档、百度搜索等功能。
 
 ## 功能特性
 
 - **智能对话**：基于豆包 Seed 大模型的自然语言对话能力
 - **钉钉集成**：支持钉钉机器人私聊和群聊场景
 - **历史记录**：自动保存聊天记录，支持上下文对话
-- **工具调用**：集成百度搜索，支持实时信息查询
-- **权限管理**：支持管理员私信过滤和群聊白名单
-- **数据持久化**：MySQL 数据库存储聊天记录
+- **智能记忆**：自动生成日记忆和月记忆，实现长期记忆能力
+- **工具调用**：集成百度搜索和历史记录搜索，支持实时信息查询
+- **权限管理**：支持管理员私信过滤
+- **数据持久化**：MySQL 数据库存储聊天记录和记忆
 
 ## 技术栈
 
@@ -18,6 +19,7 @@
 - **数据库**: [MySQL2](https://github.com/sidorares/node-mysql2) - 数据库驱动
 - **消息平台**: [DingTalk Stream](https://github.com/alibaba/dingtalk-stream-sdk-nodejs) - 钉钉机器人
 - **定时任务**: [node-cron](https://github.com/node-cron/node-cron) - 定时任务调度
+- **日期处理**: [dayjs](https://dayjs.gitee.io/) - 日期处理库
 - **构建工具**: TypeScript + tsx + tsc-alias
 
 ## 项目结构
@@ -30,26 +32,31 @@ chat-bot/
 │   │   └── request.ts          # HTTP 请求基础封装
 │   ├── db/                     # 数据库相关
 │   │   ├── mysql.ts            # MySQL 连接池配置
-│   │   └── record.ts           # 聊天记录数据操作
+│   │   ├── record.ts           # 聊天记录数据操作
+│   │   └── memory.ts           # 记忆数据操作
 │   ├── routes/                 # 路由层
 │   │   ├── middleware/         # 中间件
 │   │   │   └── steamAuth.ts    # 开放接口认证中间件
-│   │   ├── dingtalk.ts         # 钉钉消息路由
 │   │   └── open.ts             # 开放接口路由（外部系统发消息）
 │   ├── services/               # 业务服务层
 │   │   ├── dingtalk/           # 钉钉机器人服务
 │   │   │   ├── index.ts        # 钉钉消息监听与处理
 │   │   │   └── send.ts         # 钉钉消息发送
-│   │   └── doubao/             # 豆包 AI 服务
-│   │       ├── index.ts        # AI 对话核心逻辑
-│   │       ├── agents/
-│   │       │   └── chat.ts     # 闲聊 Agent
-│   │       ├── prompts/
-│   │       │   └── chat.ts     # 角色提示词
-│   │       └── tools/
-│   │           └── index.ts    # 工具函数（百度搜索）
+│   │   ├── doubao/             # 豆包 AI 服务
+│   │   │   ├── index.ts        # AI 对话核心逻辑
+│   │   │   ├── agents/
+│   │   │   │   ├── chat.ts     # 闲聊 Agent
+│   │   │   │   └── memory.ts   # 记忆生成 Agent
+│   │   │   ├── prompts/
+│   │   │   │   ├── chat.ts     # 闲聊角色提示词
+│   │   │   │   └── memory.ts   # 记忆生成提示词
+│   │   │   └── tools/
+│   │   │       └── index.ts    # 工具函数（百度搜索、记录搜索）
+│   │   └── memory/             # 记忆服务
+│   │       └── index.ts        # 记忆生成定时任务
 │   ├── stores/                 # 数据缓存层
-│   │   └── record.ts           # 聊天记录内存缓存
+│   │   ├── record.ts           # 聊天记录内存缓存
+│   │   └── memory.ts           # 记忆内存缓存
 │   ├── types/                  # TypeScript 类型定义
 │   │   ├── baiduApi.d.ts       # 百度 API 类型
 │   │   └── common.d.ts         # 通用类型定义
@@ -105,7 +112,9 @@ cp .env.example .env
 
 ### 数据库初始化
 
-首次运行时会自动创建 `record` 表，表结构如下：
+首次运行时会自动创建以下数据表：
+
+**record 表（聊天记录）**
 
 ```sql
 CREATE TABLE IF NOT EXISTS record (
@@ -116,6 +125,19 @@ CREATE TABLE IF NOT EXISTS record (
   groupName VARCHAR(200) COMMENT '群组名',
   content TEXT NOT NULL COMMENT '聊天内容',
   type VARCHAR(10) NOT NULL COMMENT '消息类型：user-用户消息，ai-AI消息',
+  isMemorized TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否已生成记忆',
+  createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间'
+);
+```
+
+**memory 表（记忆归档）**
+
+```sql
+CREATE TABLE IF NOT EXISTS memory (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  type VARCHAR(10) NOT NULL COMMENT '记忆类型：day/month/year',
+  content TEXT NOT NULL COMMENT '记忆内容',
+  date VARCHAR(20) NOT NULL COMMENT '对应日期',
   createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间'
 );
 ```
@@ -146,36 +168,50 @@ npm start
 
 1. 接收钉钉消息推送
 2. 过滤非文本消息
-3. 查询历史聊天记录（最近 24 小时）
-4. 调用 AI Agent 生成回复
-5. 分段发送回复消息
-6. 保存对话记录到数据库
+3. 查询未归档的历史聊天记录
+4. 查询所有历史记忆
+5. 调用 AI Agent 生成回复
+6. 分段发送回复消息
+7. 保存对话记录到数据库
 
 ### 2. AI 对话系统
 
 基于豆包 Seed 模型的多轮对话系统：
 
-- **角色设定**：初辰科技机器人"小红帽"
-- **上下文记忆**：自动关联最近 24 小时对话记录
-- **工具调用**：支持百度搜索获取实时信息
+- **角色设定**：机器人"小红帽"
+- **上下文记忆**：综合历史记忆和近期聊天记录
+- **工具调用**：支持百度搜索和历史记录搜索
 - **结构化输出**：JSON 格式控制回复内容
 
-### 3. 工具调用
+### 3. 智能记忆系统
+
+自动归档聊天记录，形成长期记忆：
+
+| 记忆类型   | 生成时间         | 说明                               |
+| ---------- | ---------------- | ---------------------------------- |
+| **日记忆** | 每天凌晨 3:05    | 将前一天聊天记录总结为简洁的日记忆 |
+| **月记忆** | 每月1号凌晨 3:05 | 将上月日记忆汇总为月度总结         |
+
+记忆生成后，原始聊天记录会被标记为已归档，AI 对话时优先使用记忆内容。
+
+### 4. 工具调用
 
 目前集成的工具：
 
-| 工具名             | 功能     | 触发条件               |
-| ------------------ | -------- | ---------------------- |
-| `get_baidu_search` | 百度搜索 | 询问时事热点、实时信息 |
+| 工具名                | 功能         | 触发条件               |
+| --------------------- | ------------ | ---------------------- |
+| `get_baidu_search`    | 百度搜索     | 询问时事热点、实时信息 |
+| `search_chat_records` | 历史记录搜索 | 查找用户之前提到的信息 |
 
-### 4. 聊天记录管理
+### 5. 聊天记录管理
 
 - **内存缓存**：启动时加载全部历史记录到内存
 - **按用户查询**：支持私聊上下文
 - **按群组查询**：支持群聊上下文
+- **关键词搜索**：支持根据关键词搜索历史记录
 - **自动持久化**：所有记录保存到 MySQL
 
-### 5. 开放接口（外部系统发送钉钉消息）
+### 6. 开放接口（外部系统发送钉钉消息）
 
 支持外部系统通过 HTTP 接口调用发送钉钉消息。
 
@@ -212,24 +248,13 @@ curl -X POST http://localhost:1801/api/open/send \
   }'
 ```
 
-**环境变量配置：**
-
-```bash
-# 开放接口密钥
-OPEN_KEY=your_open_key_here
-```
-
-**认证说明：**
-
-- `x-open-key` 必须匹配环境变量 `OPEN_KEY`
-- `x-system-id` 和 `x-system-token` 预留用于后续扩展校验
-
 ## 注意事项
 
 1. **安全**：`.env` 文件包含敏感信息，请勿提交到代码仓库
 2. **钉钉配置**：需要在钉钉开放平台创建企业内部应用，并开启机器人功能
 3. **API 限额**：注意豆包和百度 API 的调用限额和费用
 4. **数据库**：生产环境建议配置数据库连接池和定期备份
+5. **记忆服务**：记忆生成依赖定时任务，请确保服务持续运行
 
 ## License
 

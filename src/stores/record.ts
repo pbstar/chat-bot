@@ -60,6 +60,19 @@ const createRecordStore = () => {
         }
       }
     },
+
+    // 根据关键词查询聊天记录（content 取前 100 字）
+    searchByKeyword(keyword: string): ChatRecord[] {
+      return Array.from(allChatRecords.values())
+        .filter((r) => r.content.includes(keyword))
+        .map((r) => ({
+          ...r,
+          content:
+            r.content.length > 100
+              ? r.content.slice(0, 100) + "..."
+              : r.content,
+        }));
+    },
   };
 };
 

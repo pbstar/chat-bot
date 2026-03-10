@@ -1,6 +1,6 @@
 import { chat } from "@/services/doubao";
 import { CHAT_AGENT_PROMPT } from "@/services/doubao/prompts/chat";
-import { get_baidu_search } from "@/services/doubao/tools";
+import { get_baidu_search, search_chat_records } from "@/services/doubao/tools";
 import type { Message, Tool } from "@/types/common";
 import type { ChatRecord } from "@/db/record";
 import type { Memory } from "@/db/memory";
@@ -98,6 +98,42 @@ export const chatAgent = async (
         text += " - 内容 时间 来源\n";
         text += results
           .map((n) => ` - ${n.content} ${n.time} ${n.source}`)
+          .join("\n");
+        return text;
+      },
+    },
+    {
+      type: "function",
+      name: "search_chat_records",
+      description:
+        "根据关键词搜索历史聊天记录，用于查找用户之前提到过的信息或回顾对话历史。当用户询问之前说过什么、查找历史信息、回顾某个话题时使用",
+      parameters: {
+        type: "object",
+        properties: {
+          keyword: {
+            type: "string",
+            description: "搜索关键词",
+          },
+        },
+        required: ["keyword"],
+      },
+      handler: async (args: string) => {
+        const { keyword } = JSON.parse(args) as { keyword: string };
+        const results = search_chat_records(keyword);
+        if (results.length === 0) {
+          return "未找到相关聊天记录";
+        }
+        let text = `找到 ${results.length} 条相关聊天记录:\n`;
+        text += results
+          .map((r) => {
+            const label =
+              r.type === "user"
+                ? r.groupId && r.userName
+                  ? r.userName
+                  : "用户"
+                : "AI";
+            return `${label}：${r.content}`;
+          })
           .join("\n");
         return text;
       },
