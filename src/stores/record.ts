@@ -9,11 +9,9 @@ const createRecordStore = () => {
     init(records: ChatRecord[]) {
       try {
         allChatRecords.clear();
-
         for (const record of records) {
           allChatRecords.set(record.id, record);
         }
-
         console.log(
           `初始化聊天记录缓存完成，共加载 ${allChatRecords.size} 条记录`,
         );
@@ -22,50 +20,45 @@ const createRecordStore = () => {
       }
     },
 
-    // 根据用户ID获取聊天记录（最近24小时，content取前100字）
+    // 根据用户ID获取未归档的聊天记录（content 取前 100 字）
     getByUserId(userId: string): ChatRecord[] {
-      const now = Date.now();
-      const twentyFourHoursAgo = now - 24 * 60 * 60 * 1000;
-      const records = Array.from(allChatRecords.values())
-        .filter(
-          (record) =>
-            record.userId === userId &&
-            record.createdAt.getTime() > twentyFourHoursAgo,
-        )
-        .map((record) => ({
-          ...record,
+      return Array.from(allChatRecords.values())
+        .filter((r) => r.userId === userId && !r.isMemorized)
+        .map((r) => ({
+          ...r,
           content:
-            record.content.length > 100
-              ? record.content.slice(0, 100) + "..."
-              : record.content,
+            r.content.length > 100
+              ? r.content.slice(0, 100) + "..."
+              : r.content,
         }));
-      return records;
     },
 
-    // 根据群组ID获取聊天记录（最近24小时，content取前100字）
+    // 根据群组ID获取未归档的聊天记录（content 取前 100 字）
     getByGroupId(groupId: string): ChatRecord[] {
-      const now = Date.now();
-      const twentyFourHoursAgo = now - 24 * 60 * 60 * 1000;
-      const records = Array.from(allChatRecords.values())
-        .filter(
-          (record) =>
-            record.groupId === groupId &&
-            record.createdAt.getTime() > twentyFourHoursAgo,
-        )
-        .map((record) => ({
-          ...record,
+      return Array.from(allChatRecords.values())
+        .filter((r) => r.groupId === groupId && !r.isMemorized)
+        .map((r) => ({
+          ...r,
           content:
-            record.content.length > 100
-              ? record.content.slice(0, 100) + "..."
-              : record.content,
+            r.content.length > 100
+              ? r.content.slice(0, 100) + "..."
+              : r.content,
         }));
-      return records;
     },
 
     // 添加聊天记录
     add(record: ChatRecord): void {
-      // 存储到全局Map
       allChatRecords.set(record.id, record);
+    },
+
+    // 批量标记为已归档
+    markAsMemorized(ids: number[]): void {
+      for (const id of ids) {
+        const record = allChatRecords.get(id);
+        if (record) {
+          allChatRecords.set(id, { ...record, isMemorized: true });
+        }
+      }
     },
   };
 };

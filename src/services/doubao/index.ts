@@ -15,28 +15,6 @@ interface ResponsesResponse {
   output: OutputItem[];
 }
 
-// 结构化输出格式
-interface TextFormat {
-  type: "json_schema";
-  name: string;
-  strict: boolean;
-  schema: {
-    type: "object";
-    properties: {
-      messages: {
-        type: "array";
-        items: { type: "string" };
-        description: string;
-      };
-    };
-    required: string[];
-  };
-}
-
-interface StructuredOutput {
-  messages: string[];
-}
-
 const SEED_URL = "https://ark.cn-beijing.volces.com/api/v3/responses";
 
 const getHeaders = (): Record<string, string> => {
@@ -48,36 +26,10 @@ const getHeaders = (): Record<string, string> => {
   };
 };
 
-// 结构化输出的 JSON Schema 定义
-const getStructuredOutputFormat = (): TextFormat => ({
-  type: "json_schema",
-  name: "chat_response",
-  strict: true,
-  schema: {
-    type: "object",
-    properties: {
-      messages: {
-        type: "array",
-        items: { type: "string" },
-        description: "聊天机器人的回复消息数组，每条消息为一个字符串",
-      },
-    },
-    required: ["messages"],
-  },
-});
-
-// 从结构化输出中提取 messages 数组
-const extractMessages = (output: OutputItem[]): string[] => {
+// 从输出中提取纯文本
+const extractText = (output: OutputItem[]): string => {
   const message = output.find((o) => o.type === "message");
-  const jsonText =
-    message?.content?.find((c) => c.type === "output_text")?.text ?? "{}";
-  try {
-    const parsed: StructuredOutput = JSON.parse(jsonText);
-    return parsed.messages || [];
-  } catch {
-    console.error("[AI调用] 解析结构化输出失败:", jsonText);
-    return [];
-  }
+  return message?.content?.find((c) => c.type === "output_text")?.text ?? "";
 };
 
 // 执行工具调用
@@ -124,21 +76,20 @@ const handleResponse = async (
   result: ResponsesResponse,
   toolHandlerMap: Map<string, (args: string) => Promise<string>>,
   depth: number,
-): Promise<string[]> => {
+): Promise<string> => {
   const toolCalls = result.output.filter((o) => o.type === "function_call");
   logToolCalls(toolCalls, depth);
 
   // 无工具调用，直接返回
   if (toolCalls.length === 0 || toolHandlerMap.size === 0) {
     console.log(`[AI调用] 第${depth}轮无工具调用，返回结果`);
-    return extractMessages(result.output);
+    return extractText(result.output);
   }
 
   // 超过最大轮数
   if (depth >= MAX_TOOL_ROUNDS) {
     console.log(`[AI调用] 警告: 已达到最大工具调用轮数(${MAX_TOOL_ROUNDS})`);
-    const content = extractMessages(result.output);
-    return content.length > 0 ? content : ["工具调用次数过多，请简化您的问题"];
+    return extractText(result.output) || "工具调用次数过多，请简化您的问题";
   }
 
   // 执行工具并递归
@@ -152,7 +103,7 @@ const chatWithTools = async (
   toolOutputs: OutputItem[],
   toolHandlerMap: Map<string, (args: string) => Promise<string>>,
   depth: number,
-): Promise<string[]> => {
+): Promise<string> => {
   console.log(`[AI调用] 第${depth}轮请求开始...`);
 
   const result = await post<ResponsesResponse>(
@@ -169,12 +120,13 @@ const chatWithTools = async (
   return handleResponse(result, toolHandlerMap, depth);
 };
 
-// 主聊天函数 - 返回 string[]
+// 主聊天函数 - 返回原始文本，textFormat 由调用方按需传入
 export const chat = async (data: {
   messages: Message[];
   tools?: Tool[];
-}): Promise<string[]> => {
-  const { messages, tools } = data;
+  textFormat?: Record<string, unknown>;
+}): Promise<string> => {
+  const { messages, tools, textFormat } = data;
 
   // 构建工具映射
   const toolHandlerMap = new Map<string, (args: string) => Promise<string>>();
@@ -202,7 +154,7 @@ export const chat = async (data: {
       model: "doubao-seed-2-0-lite-260215",
       input: messages,
       tools: apiTools,
-      text: { format: getStructuredOutputFormat() },
+      ...(textFormat && { text: { format: textFormat } }),
     },
     { headers: getHeaders() },
   );

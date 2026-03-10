@@ -1,6 +1,7 @@
 import { DWClient, EventAck, TOPIC_ROBOT } from "dingtalk-stream";
 import { post } from "@/api/request";
 import { chatAgent } from "@/services/doubao/agents/chat";
+import { memoryStore } from "@/services/memory";
 import createRecordStore from "@/stores/record";
 import { getAllChatRecords, addChatRecord } from "@/db/record";
 import { delay } from "@/utils/delay";
@@ -62,16 +63,15 @@ client.registerCallbackListener(TOPIC_ROBOT, async (event) => {
   });
   // 分段式对话流程
   try {
-    // 第一步：获取记忆
-    let records = [];
-    if (msg.isGroup) {
-      records = recordStore.getByGroupId(msg.groupId);
-    } else {
-      records = recordStore.getByUserId(msg.userId);
-    }
-    // 第二步：闲聊Agent处理
-    const response = await chatAgent(msg.content, records);
-    // 第三步：发送回复
+    // 获取未归档聊天记录
+    const records = msg.isGroup
+      ? recordStore.getByGroupId(msg.groupId)
+      : recordStore.getByUserId(msg.userId);
+    // 获取所有记忆
+    const memories = memoryStore.getAll();
+    // 闲聊Agent处理
+    const response = await chatAgent(msg.content, records, memories);
+    // 发送回复
     for (const item of response) {
       post(data.sessionWebhook, {
         msgtype: "text",
