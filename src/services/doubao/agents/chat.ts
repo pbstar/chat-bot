@@ -1,6 +1,10 @@
 import { chat } from "@/services/doubao";
 import { CHAT_AGENT_PROMPT } from "@/services/doubao/prompts/chat";
-import { get_baidu_search, search_chat_records } from "@/services/doubao/tools";
+import {
+  get_baidu_search,
+  search_chat_records,
+  speak_to_user,
+} from "@/services/doubao/tools";
 import type { Message, Tool } from "@/types/common";
 import type { ChatRecord } from "@/db/record";
 import type { Memory } from "@/db/memory";
@@ -74,7 +78,7 @@ export const chatAgent = async (
     },
   ];
 
-  // 定义工具：百度搜索
+  // 定义工具：百度搜索、聊天记录查询、发起会话
   const tools: Tool[] = [
     {
       type: "function",
@@ -136,6 +140,34 @@ export const chatAgent = async (
           })
           .join("\n");
         return text;
+      },
+    },
+    {
+      type: "function",
+      name: "speak_to_user",
+      description:
+        "发起会话，用于让AI主动发起对话。当用户说“五分钟后提醒我做某事”之类的要求时使用，请根据用户要求设置延迟时间",
+      parameters: {
+        type: "object",
+        properties: {
+          message: {
+            type: "string",
+            description: "会话内容",
+          },
+          delay_ms: {
+            type: "number",
+            description: "延迟时间（毫秒）",
+          },
+        },
+        required: ["message", "delay_ms"],
+      },
+      handler: async (args: string) => {
+        const { message, delay_ms } = JSON.parse(args) as {
+          message: string;
+          delay_ms: number;
+        };
+        speak_to_user(message, delay_ms);
+        return "会话已发起";
       },
     },
   ];
