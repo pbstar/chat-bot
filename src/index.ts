@@ -1,6 +1,5 @@
 import express from "express";
-import { initDingtalk } from "@/services/dingtalk";
-import { initMemory } from "@/services/memory";
+import { initRobot } from "@/services/robot";
 import openRoutes from "@/routes/open";
 
 const app = express();
@@ -14,8 +13,7 @@ app.use("/api/open", openRoutes);
 const main = (): void => {
   app.listen(PORT, () => {
     console.log(`chat-bot running: http://localhost:${PORT}`);
-    initDingtalk();
-    initMemory();
+    initRobot();
   });
 };
 
