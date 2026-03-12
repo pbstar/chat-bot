@@ -1,5 +1,5 @@
 import { chat } from "@/services/doubao";
-import { CHAT_AGENT_PROMPT } from "@/services/doubao/prompts/chat";
+import { BRAIN_AGENT_PROMPT } from "@/services/doubao/prompts/brain";
 import {
   get_baidu_search,
   search_chat_records,
@@ -12,7 +12,7 @@ import type { Memory } from "@/db/memory";
 // 结构化输出 JSON Schema
 const TEXT_FORMAT = {
   type: "json_schema",
-  name: "chat_response",
+  name: "brain_response",
   strict: true,
   schema: {
     type: "object",
@@ -20,7 +20,7 @@ const TEXT_FORMAT = {
       messages: {
         type: "array",
         items: { type: "string" },
-        description: "聊天机器人的回复消息数组，每条消息为一个字符串",
+        description: "大脑Agent的回复消息数组，每条消息为一个字符串",
       },
     },
     required: ["messages"],
@@ -33,7 +33,7 @@ const parseMessages = (text: string): string[] => {
     const parsed = JSON.parse(text) as { messages: string[] };
     return parsed.messages || [];
   } catch {
-    console.error("[chatAgent] 解析结构化输出失败:", text);
+    console.error("[brainAgent] 解析结构化输出失败:", text);
     return [];
   }
 };
@@ -60,14 +60,14 @@ const formatRecords = (records: ChatRecord[]): string => {
     .join("\n");
 };
 
-// 闲聊 Agent
-export const chatAgent = async (
+// 大脑 Agent - 复杂处理，携带记忆和工具
+export const brainAgent = async (
   content: string,
   records: ChatRecord[],
   memories: Memory[],
 ): Promise<string[]> => {
   const messages: Message[] = [
-    { role: "system", content: CHAT_AGENT_PROMPT },
+    { role: "system", content: BRAIN_AGENT_PROMPT },
     {
       role: "user",
       content: [
@@ -146,7 +146,7 @@ export const chatAgent = async (
       type: "function",
       name: "speak_to_user",
       description:
-        "发起会话，用于让AI主动发起对话。当用户说“五分钟后提醒我做某事”之类的要求时使用，请根据用户要求设置延迟时间",
+        "发起会话，用于让AI主动发起对话。当用户说‘五分钟后提醒我做某事‘之类的要求时使用，请根据用户要求设置延迟时间",
       parameters: {
         type: "object",
         properties: {
