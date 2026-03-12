@@ -27,6 +27,7 @@
     "node": ">=20.0.0"
   },
   "dependencies": {
+    "adm-zip": "^0.5.16",
     "axios": "^1.13.4",
     "dayjs": "^1.11.19",
     "dingtalk-stream": "^2.1.4",

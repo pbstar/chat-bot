@@ -9,6 +9,8 @@ import {
 import { join, dirname, extname } from "path";
 import { fileURLToPath } from "url";
 import { minify } from "terser";
+import AdmZip from "adm-zip";
+import dayjs from "dayjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const rootDir = join(__dirname, "..");
@@ -71,6 +73,15 @@ if (statSync(publicDir, { throwIfNoEntry: false })) {
   console.log("No public directory to copy.");
 }
 
+// 压缩 JavaScript 文件
 console.log("\nMinifying JavaScript files...");
 await minifyJsFiles(distDir);
 console.log("Build minification completed!");
+
+// 打包dist目录为zip压缩包
+const zip = new AdmZip();
+zip.addLocalFolder(distDir, "dist");
+zip.writeZip(
+  join(rootDir, `dist_bk/dist_${dayjs().format("YYYYMMDDHHmmss")}.zip`),
+);
+console.log("Build zip completed!");
