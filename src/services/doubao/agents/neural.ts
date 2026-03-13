@@ -2,9 +2,11 @@ import { chat } from "@/services/doubao";
 import { NEURAL_AGENT_PROMPT } from "@/services/doubao/prompts/neural";
 import type { Message } from "@/types/common";
 
+export type NeuralAction = "brain" | "reply" | "ignore";
+
 // 神经Agent返回结果
 export interface NeuralResult {
-  needBrain: boolean;
+  action: NeuralAction;
   messages: string[];
 }
 
@@ -16,17 +18,19 @@ const TEXT_FORMAT = {
   schema: {
     type: "object",
     properties: {
-      needBrain: {
-        type: "boolean",
-        description: "是否需要转交大脑处理，true表示需要，false表示直接回复",
+      action: {
+        type: "string",
+        enum: ["brain", "reply", "ignore"],
+        description:
+          "处理动作，brain表示转交大脑，reply表示直接回复，ignore表示暂不回复",
       },
       messages: {
         type: "array",
         items: { type: "string" },
-        description: "中枢神经Agent的回复消息数组，每条消息为一个字符串",
+        description: "Agent的回复消息数组，每条消息为一个字符串",
       },
     },
-    required: ["needBrain", "messages"],
+    required: ["action", "messages"],
   },
 };
 
@@ -34,13 +38,20 @@ const TEXT_FORMAT = {
 const parseResult = (text: string): NeuralResult => {
   try {
     const parsed = JSON.parse(text) as NeuralResult;
+    const action: NeuralAction =
+      parsed.action === "brain" ||
+      parsed.action === "reply" ||
+      parsed.action === "ignore"
+        ? parsed.action
+        : "brain";
+
     return {
-      needBrain: parsed.needBrain || false,
+      action,
       messages: parsed.messages || [],
     };
   } catch {
     console.error("[neuralAgent] 解析结构化输出失败:", text);
-    return { needBrain: true, messages: [] };
+    return { action: "brain", messages: [] };
   }
 };
 

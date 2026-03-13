@@ -9,8 +9,10 @@ import { send } from "@/services/dingtalk/send";
 import { addChatRecord } from "@/db/record";
 import dayjs from "dayjs";
 
+type InfoType = "message" | "pending";
+
 interface Info {
-  type: string;
+  type: InfoType;
   content: string;
   createdAt: string;
 }
@@ -53,19 +55,27 @@ const handleBrain = async (content: string) => {
 
 // 中枢神经处理 - 简单快速处理，无记忆和工具
 // 如果判断需要大脑处理，则转交大脑
-const handleNeural = async (content: string) => {
+const handleNeural = async (content: string, infoSet: Set<Info>) => {
   console.log("[机器人] 中枢神经处理:", content);
 
   try {
     const result = await neuralAgent(content);
 
-    if (result.needBrain) {
+    if (result.action === "brain") {
       console.log("[机器人] 中枢神经判断需要大脑处理，转交中...");
       await handleBrain(content);
-    } else {
+    } else if (result.action === "reply") {
       console.log("[机器人] 中枢神经回复:", result.messages);
       // TODO: 发送回复给用户
       result.messages.forEach((message) => sendMessageAndRecord(message));
+    } else {
+      console.log("[机器人] 中枢神经判断暂不回复，继续等待上下文...");
+      // 标记为待处理，等待后续消息拼接
+      infoSet.add({
+        type: "pending",
+        content,
+        createdAt: dayjs().format("YYYY-MM-DD HH:mm:ss"),
+      });
     }
   } catch (error) {
     console.error("[机器人] 中枢神经处理失败:", error);
@@ -73,14 +83,15 @@ const handleNeural = async (content: string) => {
 };
 
 // 处理信息
-const handleInfo = (info: Info[]) => {
-  const infoTextSize = info.reduce((acc, curr) => acc + curr.content.length, 0);
+const handleInfo = (info: Info[], infoSet: Set<Info>) => {
+  const newInfoLength = info.filter((item) => item.type === "message").length;
   const content = info.map((i) => i.content).join("\n");
+  if (newInfoLength === 0) return;
   // 如果信息大于5条或者内容超过100字，则直接进行大脑处理，否则进行中枢神经处理
-  if (info.length > 5 || infoTextSize > 100) {
+  if (newInfoLength > 5 || content.length > 100) {
     handleBrain(content);
   } else {
-    handleNeural(content);
+    handleNeural(content, infoSet);
   }
 };
 
@@ -108,7 +119,7 @@ export const initRobot = async () => {
   // 心跳机制
   setInterval(async () => {
     if (info.size == 0) return;
-    handleInfo(Array.from(info));
+    handleInfo(Array.from(info), info);
     info.clear();
   }, 2000);
 };
