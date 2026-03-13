@@ -71,13 +71,15 @@ const handleBrain = async (content: string) => {
   }
 };
 
-// 中枢神经处理 - 简单快速处理，无记忆和工具
+// 中枢神经处理 - 快速处理，携带近期上下文，无工具
 // 如果判断需要大脑处理，则转交大脑
 const handleNeural = async (content: string, infoSet: Set<Info>) => {
   console.log("[机器人] 中枢神经处理:", content);
 
+  const records = recordStore.getByUserId(ADMIN_ID);
+
   try {
-    const result = await neuralAgent(content);
+    const result = await neuralAgent(content, records);
 
     if (result.action === "brain") {
       console.log("[机器人] 中枢神经判断需要大脑处理，转交中...");

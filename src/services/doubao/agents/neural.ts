@@ -1,6 +1,7 @@
 import { chat } from "@/services/doubao";
 import { NEURAL_AGENT_PROMPT } from "@/services/doubao/prompts/neural";
 import type { Message } from "@/types/common";
+import type { ChatRecord } from "@/db/record";
 
 export type NeuralAction = "brain" | "reply" | "ignore";
 
@@ -55,13 +56,33 @@ const parseResult = (text: string): NeuralResult => {
   }
 };
 
-// 中枢神经 Agent - 简单快速处理，无记忆和工具
-export const neuralAgent = async (content: string): Promise<NeuralResult> => {
+// 格式化近期聊天记录
+const formatRecords = (records: ChatRecord[]): string => {
+  if (records.length === 0) return "（暂无记录）";
+  return records
+    .map((r) => {
+      const label = r.type === "user" ? "用户" : "AI";
+      return `${label}：${r.content}`;
+    })
+    .join("\n");
+};
+
+// 中枢神经 Agent - 快速处理，携带近期上下文，无工具
+export const neuralAgent = async (
+  content: string,
+  records: ChatRecord[] = [],
+): Promise<NeuralResult> => {
+  // 只取最近 8 条，避免上下文过长
+  const recentRecords = records.slice(-8);
+
   const messages: Message[] = [
     { role: "system", content: NEURAL_AGENT_PROMPT },
     {
       role: "user",
-      content: `【用户提问】\n${content}`,
+      content: [
+        `【近期聊天记录】\n${formatRecords(recentRecords)}`,
+        `【用户提问】\n${content}`,
+      ].join("\n\n"),
     },
   ];
 
