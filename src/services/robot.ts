@@ -35,11 +35,8 @@ const sendMessageAndRecord = (message: string) => {
 };
 
 // 大脑处理 - 复杂处理，携带记忆和工具
-const handleBrain = async (info: Info[]) => {
-  console.log("[机器人] 大脑处理:", info);
-
-  // 合并所有信息内容
-  const content = info.map((i) => i.content).join("\n");
+const handleBrain = async (content: string) => {
+  console.log("[机器人] 大脑处理:", content);
 
   const records = recordStore.getByUserId(ADMIN_ID);
   const memories = memoryStore.getAll();
@@ -56,18 +53,15 @@ const handleBrain = async (info: Info[]) => {
 
 // 中枢神经处理 - 简单快速处理，无记忆和工具
 // 如果判断需要大脑处理，则转交大脑
-const handleNeural = async (info: Info[]) => {
-  console.log("[机器人] 中枢神经处理:", info);
-
-  // 合并所有信息内容
-  const content = info.map((i) => i.content).join("\n");
+const handleNeural = async (content: string) => {
+  console.log("[机器人] 中枢神经处理:", content);
 
   try {
     const result = await neuralAgent(content);
 
     if (result.needBrain) {
       console.log("[机器人] 中枢神经判断需要大脑处理，转交中...");
-      await handleBrain(info);
+      await handleBrain(content);
     } else {
       console.log("[机器人] 中枢神经回复:", result.messages);
       // TODO: 发送回复给用户
@@ -75,6 +69,18 @@ const handleNeural = async (info: Info[]) => {
     }
   } catch (error) {
     console.error("[机器人] 中枢神经处理失败:", error);
+  }
+};
+
+// 处理信息
+const handleInfo = (info: Info[]) => {
+  const infoTextSize = info.reduce((acc, curr) => acc + curr.content.length, 0);
+  const content = info.map((i) => i.content).join("\n");
+  // 如果信息大于5条或者内容超过100字，则直接进行大脑处理，否则进行中枢神经处理
+  if (info.length > 5 || infoTextSize > 100) {
+    handleBrain(content);
+  } else {
+    handleNeural(content);
   }
 };
 
@@ -102,16 +108,7 @@ export const initRobot = async () => {
   // 心跳机制
   setInterval(async () => {
     if (info.size == 0) return;
-    const infoTextSize = Array.from(info).reduce(
-      (acc, curr) => acc + curr.content.length,
-      0,
-    );
-    // 如果信息大于5条或者内容超过100字，则直接进行大脑处理，否则进行中枢神经处理
-    if (info.size > 5 || infoTextSize > 100) {
-      handleBrain(Array.from(info));
-    } else {
-      handleNeural(Array.from(info));
-    }
+    handleInfo(Array.from(info));
     info.clear();
-  }, 1000);
+  }, 2000);
 };

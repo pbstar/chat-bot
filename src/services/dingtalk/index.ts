@@ -3,6 +3,7 @@ import { post } from "@/api/request";
 import { addChatRecord } from "@/db/record";
 const clientId = process.env.DINGTALK_CLIENT_ID;
 const clientSecret = process.env.DINGTALK_CLIENT_SECRET;
+const adminId = process.env.DINGTALK_ADMIN_ID;
 
 if (!clientId || !clientSecret) {
   throw new Error("DINGTALK_CLIENT_ID 或 DINGTALK_CLIENT_SECRET 未配置");
@@ -12,7 +13,6 @@ let send: (message: string) => void;
 
 // 使用 registerCallbackListener 接收消息，但手动发送确认响应
 client.registerCallbackListener(TOPIC_ROBOT, async (event) => {
-  console.log("收到消息:", event);
   const data = JSON.parse(event.data as string);
   const msg = {
     msgtype: data.msgtype, // 消息类型
@@ -33,6 +33,14 @@ client.registerCallbackListener(TOPIC_ROBOT, async (event) => {
     post(msg.sessionWebhook, {
       msgtype: "text",
       text: { content: "我暂不支持读取群消息哦~" },
+    }).catch(console.error);
+    return;
+  }
+  // 过滤非管理员消息
+  if (msg.userId !== adminId) {
+    post(msg.sessionWebhook, {
+      msgtype: "text",
+      text: { content: "我暂不支持读取非管理员消息哦~" },
     }).catch(console.error);
     return;
   }
