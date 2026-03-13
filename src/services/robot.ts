@@ -22,13 +22,14 @@ const memoryStore = createMemoryStore();
 
 // 从环境变量获取管理员ID
 const ADMIN_ID = process.env.DINGTALK_ADMIN_ID || "";
+const ADMIN_NAME = process.env.DINGTALK_ADMIN_NAME || "";
 
 // 发送消息和记录到数据库
 const sendMessageAndRecord = (message: string) => {
   send({ msgtype: "text", content: message });
   addChatRecord({
     userId: ADMIN_ID,
-    userName: "彭勃",
+    userName: ADMIN_NAME,
     groupId: "",
     groupName: "",
     content: message,
