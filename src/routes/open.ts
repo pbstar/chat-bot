@@ -33,8 +33,13 @@ router.post("/send", async (req, res) => {
       return;
     }
 
-    // 发送消息
-    await send({ msgtype, content });
+    // my-stock 系统发给指定群组，其余发给管理员
+    const systemId = req.headers["x-system-id"];
+    const systemMap = {
+      "my-stock": process.env.DINGTALK_MYSTOCK_GROUP_ID,
+    };
+    const conversationId = systemMap[systemId as keyof typeof systemMap];
+    await send({ msgtype, content, conversationId });
 
     res.json({
       success: true,
