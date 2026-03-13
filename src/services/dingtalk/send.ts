@@ -38,45 +38,69 @@ async function getToken(): Promise<string> {
   return cachedToken;
 }
 
-// 发送给管理员
-async function send(data: { msgtype: string; content: string }) {
-  const token = await getToken();
+interface SendData {
+  msgtype: string;
+  content: string;
+  // 指定用户 ID 列表，不传则发给管理员
+  userIds?: string[];
+  // 指定群会话 ID，传入则发送群消息
+  conversationId?: string;
+}
 
-  // 根据消息类型选择 msgKey
-  const msgKey = data.msgtype === "markdown" ? "sampleMarkdown" : "sampleText";
+// 构造消息参数
+function buildMsgParam(
+  msgtype: string,
+  content: string,
+): { msgKey: string; msgParam: string } {
+  const msgKey = msgtype === "markdown" ? "sampleMarkdown" : "sampleText";
+  let msgParam: Record<string, unknown> = { content };
 
-  // 构造 msgParam
-  let msgParam: Record<string, unknown> = {
-    content: data.content,
-  };
-  if (data.msgtype === "markdown") {
+  if (msgtype === "markdown") {
     // 提取第一行作为标题，过滤 markdown 符号，取前10个字
-    const firstLine = data.content.split("\n")[0] ?? "";
+    const firstLine = content.split("\n")[0] ?? "";
     const title = firstLine
       .replace(/[*#`\-\[\]!]/g, "")
       .trim()
       .slice(0, 10);
-    msgParam = {
-      title,
-      text: data.content,
-    };
+    msgParam = { title, text: content };
   }
 
-  await post(
-    "https://api.dingtalk.com/v1.0/robot/oToMessages/batchSend",
-    {
-      robotCode: clientId,
-      userIds: [adminId],
-      msgKey,
-      msgParam: JSON.stringify(msgParam),
-    },
-    {
-      headers: {
-        "x-acs-dingtalk-access-token": token,
+  return { msgKey, msgParam: JSON.stringify(msgParam) };
+}
+
+// 发送钉钉消息，支持指定用户/群，默认发给管理员
+async function send(data: SendData): Promise<void> {
+  const token = await getToken();
+  const headers = { "x-acs-dingtalk-access-token": token };
+  const { msgKey, msgParam } = buildMsgParam(data.msgtype, data.content);
+
+  if (data.conversationId) {
+    // 发送群消息
+    await post(
+      "https://api.dingtalk.com/v1.0/robot/groupMessages/send",
+      {
+        robotCode: clientId,
+        openConversationId: data.conversationId,
+        msgKey,
+        msgParam,
       },
-    },
-  );
-  console.log(`✅ 已向用户 ${adminId} 发送: ${data.content.slice(0, 50)}...`);
+      { headers },
+    );
+    console.log(
+      `✅ 已向群 ${data.conversationId} 发送: ${data.content.slice(0, 50)}...`,
+    );
+  } else {
+    // 发送单聊消息，userIds 不传则默认管理员
+    const targetIds = data.userIds?.length ? data.userIds : [adminId];
+    await post(
+      "https://api.dingtalk.com/v1.0/robot/oToMessages/batchSend",
+      { robotCode: clientId, userIds: targetIds, msgKey, msgParam },
+      { headers },
+    );
+    console.log(
+      `✅ 已向用户 ${targetIds.join(",")} 发送: ${data.content.slice(0, 50)}...`,
+    );
+  }
 }
 
 export { send };
