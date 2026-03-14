@@ -30,7 +30,7 @@ export const formatRecordsSimple = (records: ChatRecord[]): string => {
 };
 
 // 通用的 JSON Schema 定义生成器
-export const createTextFormat = <T extends string>(
+export const createTextFormat = (
   name: string,
   properties: Record<string, unknown>,
   required: string[],
