@@ -5,59 +5,38 @@ import {
   search_chat_records,
   speak_to_user,
 } from "@/services/doubao/tools";
+import {
+  formatMemories,
+  formatRecords,
+  formatRecordsSimple,
+  createTextFormat,
+  parseJsonResult,
+} from "./base";
 import type { Message, Tool } from "@/types/common";
 import type { ChatRecord } from "@/db/record";
 import type { Memory } from "@/db/memory";
 
 // 结构化输出 JSON Schema
-const TEXT_FORMAT = {
-  type: "json_schema",
-  name: "brain_response",
-  strict: true,
-  schema: {
-    type: "object",
-    properties: {
-      messages: {
-        type: "array",
-        items: { type: "string" },
-        description: "大脑Agent的回复消息数组，每条消息为一个字符串",
-      },
+const TEXT_FORMAT = createTextFormat(
+  "brain_response",
+  {
+    messages: {
+      type: "array",
+      items: { type: "string" },
+      description: "大脑Agent的回复消息数组，每条消息为一个字符串",
     },
-    required: ["messages"],
   },
-};
+  ["messages"],
+);
 
 // 解析结构化 JSON 输出
 const parseMessages = (text: string): string[] => {
-  try {
-    const parsed = JSON.parse(text) as { messages: string[] };
-    return parsed.messages || [];
-  } catch {
-    console.error("[brainAgent] 解析结构化输出失败:", text);
-    return [];
-  }
-};
-
-// 格式化记忆列表为文本
-const formatMemories = (memories: Memory[]): string => {
-  if (memories.length === 0) return "（暂无记忆）";
-  return memories.map((m) => `【${m.date}】${m.content}`).join("\n");
-};
-
-// 格式化聊天记录为文本
-const formatRecords = (records: ChatRecord[]): string => {
-  if (records.length === 0) return "（暂无记录）";
-  return records
-    .map((r) => {
-      const label =
-        r.type === "user"
-          ? r.groupId && r.userName
-            ? r.userName
-            : "用户"
-          : "AI";
-      return `${label}：${r.content}`;
-    })
-    .join("\n");
+  const parsed = parseJsonResult<{ messages: string[] }>(
+    text,
+    { messages: [] },
+    "brainAgent",
+  );
+  return parsed.messages || [];
 };
 
 // 大脑 Agent - 复杂处理，携带记忆和工具
@@ -127,26 +106,14 @@ export const brainAgent = async (
         if (results.length === 0) {
           return "未找到相关聊天记录";
         }
-        let text = `找到 ${results.length} 条相关聊天记录:\n`;
-        text += results
-          .map((r) => {
-            const label =
-              r.type === "user"
-                ? r.groupId && r.userName
-                  ? r.userName
-                  : "用户"
-                : "AI";
-            return `${label}：${r.content}`;
-          })
-          .join("\n");
-        return text;
+        return `找到 ${results.length} 条相关聊天记录:\n${formatRecordsSimple(results)}`;
       },
     },
     {
       type: "function",
       name: "speak_to_user",
       description:
-        "发起会话，用于让AI主动发起对话。当用户说‘五分钟后提醒我做某事‘之类的要求时使用，请根据用户要求设置延迟时间",
+        "发起会话，用于让AI主动发起对话。当用户说'五分钟后提醒我做某事'之类的要求时使用，请根据用户要求设置延迟时间",
       parameters: {
         type: "object",
         properties: {

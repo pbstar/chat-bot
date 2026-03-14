@@ -1,6 +1,12 @@
 import { chat } from "@/services/doubao";
 import { PROACTIVE_AGENT_PROMPT } from "@/services/doubao/prompts/proactive";
 import { get_baidu_search, search_chat_records } from "@/services/doubao/tools";
+import {
+  formatMemories,
+  formatRecords,
+  createTextFormat,
+  parseJsonResult,
+} from "./base";
 import type { Message, Tool } from "@/types/common";
 import type { ChatRecord } from "@/db/record";
 import type { Memory } from "@/db/memory";
@@ -11,62 +17,38 @@ export interface ProactiveResult {
 }
 
 // 结构化输出 JSON Schema
-const TEXT_FORMAT = {
-  type: "json_schema",
-  name: "proactive_response",
-  strict: true,
-  schema: {
-    type: "object",
-    properties: {
-      action: {
-        type: "string",
-        enum: ["speak", "silent"],
-        description: "speak 表示发消息，silent 表示选择不发",
-      },
-      messages: {
-        type: "array",
-        items: { type: "string" },
-        description: "action 为 speak 时填写消息内容，silent 时填空数组",
-      },
+const TEXT_FORMAT = createTextFormat(
+  "proactive_response",
+  {
+    action: {
+      type: "string",
+      enum: ["speak", "silent"],
+      description: "speak 表示发消息，silent 表示选择不发",
     },
-    required: ["action", "messages"],
+    messages: {
+      type: "array",
+      items: { type: "string" },
+      description: "action 为 speak 时填写消息内容，silent 时填空数组",
+    },
   },
-};
+  ["action", "messages"],
+);
 
 // 解析结构化输出
 const parseResult = (text: string): ProactiveResult => {
-  try {
-    const parsed = JSON.parse(text) as ProactiveResult;
-    return {
-      action: parsed.action === "silent" ? "silent" : "speak",
-      messages: parsed.messages || [],
-    };
-  } catch {
-    console.error("[proactiveAgent] 解析结构化输出失败:", text);
-    return { action: "silent", messages: [] };
-  }
-};
-
-// 格式化记忆列表
-const formatMemories = (memories: Memory[]): string => {
-  if (memories.length === 0) return "（暂无记忆）";
-  return memories.map((m) => `【${m.date}】${m.content}`).join("\n");
-};
-
-// 格式化聊天记录
-const formatRecords = (records: ChatRecord[]): string => {
-  if (records.length === 0) return "（暂无记录）";
-  return records
-    .map((r) => {
-      const label = r.type === "user" ? "用户" : "AI";
-      return `${label}：${r.content}`;
-    })
-    .join("\n");
+  const parsed = parseJsonResult<{ action: string; messages: string[] }>(
+    text,
+    { action: "silent", messages: [] },
+    "proactiveAgent",
+  );
+  return {
+    action: parsed.action === "silent" ? "silent" : "speak",
+    messages: parsed.messages || [],
+  };
 };
 
 // 主动联系 Agent
 export const proactiveAgent = async (
-  triggerReason: string,
   records: ChatRecord[],
   memories: Memory[],
 ): Promise<ProactiveResult> => {
@@ -75,7 +57,6 @@ export const proactiveAgent = async (
     {
       role: "user",
       content: [
-        `【触发原因】\n${triggerReason}`,
         `【历史记忆】\n${formatMemories(memories)}`,
         `【近期聊天记录】\n${formatRecords(records)}`,
       ].join("\n\n"),
@@ -98,11 +79,7 @@ export const proactiveAgent = async (
       handler: async (args: string) => {
         const { query } = JSON.parse(args) as { query: string };
         const results = await get_baidu_search(query);
-        let text = "搜索结果\n";
-        text += results
-          .map((n) => ` - ${n.content} ${n.time} ${n.source}`)
-          .join("\n");
-        return text;
+        return `搜索结果\n${results.map((n) => ` - ${n.content} ${n.time} ${n.source}`).join("\n")}`;
       },
     },
     {
@@ -121,14 +98,7 @@ export const proactiveAgent = async (
         const { keyword } = JSON.parse(args) as { keyword: string };
         const results = search_chat_records(keyword);
         if (results.length === 0) return "未找到相关聊天记录";
-        let text = `找到 ${results.length} 条相关聊天记录:\n`;
-        text += results
-          .map((r) => {
-            const label = r.type === "user" ? "用户" : "AI";
-            return `${label}：${r.content}`;
-          })
-          .join("\n");
-        return text;
+        return `找到 ${results.length} 条相关聊天记录:\n${formatRecords(results)}`;
       },
     },
   ];

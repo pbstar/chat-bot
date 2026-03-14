@@ -8,7 +8,7 @@ import { neuralAgent } from "@/services/doubao/agents/neural";
 import { proactiveAgent } from "@/services/doubao/agents/proactive";
 import { send } from "@/services/dingtalk/send";
 import { addChatRecord } from "@/db/record";
-import dayjs, { type Dayjs } from "dayjs";
+import dayjs from "dayjs";
 
 type InfoType = "message" | "pending";
 
@@ -25,22 +25,14 @@ const memoryStore = createMemoryStore();
 const ADMIN_ID = process.env.DINGTALK_ADMIN_ID || "";
 const ADMIN_NAME = process.env.DINGTALK_ADMIN_NAME || "";
 
-// 最近一次双向沟通时间（用户发消息 / AI 被动回复 / AI 主动发消息 均算）
-let lastActivityAt: Dayjs | null = null;
 // 下次执行主动联系检查的时间（初始立即检查）
-let nextProactiveCheckAt: Dayjs = dayjs();
-
-// 主动联系仅在此时间段内触发（小时）
-const PROACTIVE_HOUR_START = 9;
-const PROACTIVE_HOUR_END = 22;
-// 沉默超过此小时数触发主动联系检查
-const PROACTIVE_SILENCE_HOURS = 2;
+let nextProactiveCheckAt = dayjs();
 
 // 生成随机检查间隔（20~50 分钟）
 const randomCheckInterval = () =>
   Math.floor(Math.random() * 30 + 20) * 60 * 1000;
 
-// 发送消息和记录到数据库（AI 发消息时更新最近活跃时间）
+// 发送消息和记录到数据库
 const sendMessageAndRecord = (message: string) => {
   send({ msgtype: "text", content: message });
   addChatRecord({
@@ -51,7 +43,6 @@ const sendMessageAndRecord = (message: string) => {
     content: message,
     type: "ai",
   });
-  lastActivityAt = dayjs();
 };
 
 // 大脑处理 - 复杂处理，携带记忆和工具
@@ -64,14 +55,16 @@ const handleBrain = async (content: string) => {
   try {
     const responses = await brainAgent(content, records, memories);
     console.log("[机器人] 大脑回复:", responses);
-    // TODO: 发送回复给用户
-    responses.forEach((response) => sendMessageAndRecord(response));
+    // 发送回复给用户
+    for (const response of responses) {
+      sendMessageAndRecord(response);
+    }
   } catch (error) {
     console.error("[机器人] 大脑处理失败:", error);
   }
 };
 
-// 中枢神经处理 - 快速处理，携带近期上下文，无工具
+// 中枢神经处理 - 快速处理，仅携带近期上下文，无记忆，无工具
 // 如果判断需要大脑处理，则转交大脑
 const handleNeural = async (content: string, infoSet: Set<Info>) => {
   console.log("[机器人] 中枢神经处理:", content);
@@ -86,8 +79,10 @@ const handleNeural = async (content: string, infoSet: Set<Info>) => {
       await handleBrain(content);
     } else if (result.action === "reply") {
       console.log("[机器人] 中枢神经回复:", result.messages);
-      // TODO: 发送回复给用户
-      result.messages.forEach((message) => sendMessageAndRecord(message));
+      // 发送回复给用户
+      for (const message of result.messages) {
+        sendMessageAndRecord(message);
+      }
     } else {
       console.log("[机器人] 中枢神经判断暂不回复，继续等待上下文...");
       // 标记为待处理，等待后续消息拼接
@@ -117,29 +112,11 @@ const handleInfo = (info: Info[], infoSet: Set<Info>) => {
 
 // 检查并触发主动联系
 const checkProactive = async () => {
-  const now = dayjs();
-  const hour = now.hour();
-
-  // 只在合理时间段内主动联系
-  if (hour < PROACTIVE_HOUR_START || hour >= PROACTIVE_HOUR_END) return;
-
-  const hoursSinceActivity = lastActivityAt
-    ? now.diff(lastActivityAt, "hour")
-    : Infinity;
-  if (hoursSinceActivity < PROACTIVE_SILENCE_HOURS) return;
-
-  const reason =
-    hoursSinceActivity === Infinity
-      ? "从未有过任何沟通记录"
-      : `已有 ${hoursSinceActivity} 小时没有任何沟通了`;
-
-  console.log("[机器人] 触发主动联系，原因:", reason);
-
   const records = recordStore.getByUserId(ADMIN_ID);
   const memories = memoryStore.getAll();
 
   try {
-    const result = await proactiveAgent(reason, records, memories);
+    const result = await proactiveAgent(records, memories);
     if (result.action === "silent") {
       console.log("[机器人] 主动联系：选择沉默");
       return;
@@ -160,28 +137,12 @@ export const initRobot = async () => {
   const records = await getAllChatRecords();
   recordStore.init(records);
 
-  // 从最近一条记录（任意类型）初始化最近活跃时间
-  const latestRecord = records
-    .filter((r) => r.userId === ADMIN_ID)
-    .sort(
-      (a, b) =>
-        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-    )[0];
-  if (latestRecord) {
-    lastActivityAt = dayjs(latestRecord.createdAt);
-    console.log(
-      "[机器人] 最近活跃时间:",
-      lastActivityAt.format("YYYY-MM-DD HH:mm:ss"),
-    );
-  }
-
   // 启动记忆服务
   initMemory();
 
   // 初始化钉钉机器人
   initDingtalk((message: string) => {
     console.log("[机器人] 听到:", message);
-    lastActivityAt = dayjs();
     info.add({
       type: "message",
       content: message,

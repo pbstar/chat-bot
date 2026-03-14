@@ -284,9 +284,9 @@ function buildMsgParam(msgtype: string, content: string) {
 }
 ```
 
-## 三、AI 大脑：双层 Agent 架构
+## 三、AI 大脑：三 Agent 架构
 
-这是整个项目最核心的部分。为了平衡响应速度和处理深度，项目采用了 **双层 Agent 架构**：
+这是整个项目最核心的部分。为了平衡响应速度、处理深度和主动交互，项目采用了 **三 Agent 架构**：
 
 ### 3.1 架构设计
 
@@ -310,12 +310,21 @@ function buildMsgParam(msgtype: string, content: string) {
     │   大脑 Agent     │  ← 深度、完整、有记忆有工具
     │  （brainAgent）  │
     └─────────────────┘
+
+定时触发（随机间隔 20-50 分钟）
+    │
+    ▼
+┌─────────────────┐
+│  主动联系 Agent  │  ← 智能决策是否主动发消息
+│ （proactiveAgent）│
+└─────────────────┘
 ```
 
 **设计思路**：
 
 - **中枢神经 Agent**：处理简单问题，如问候、闲聊、简单问答。响应快，成本低
 - **大脑 Agent**：处理复杂问题，需要记忆和工具支持。响应慢，但能力强大
+- **主动联系 Agent**：智能决策是否主动发起对话，避免骚扰用户
 - **路由判断**：由中枢神经 Agent 自行判断是否需要转交大脑
 
 ### 3.2 中枢神经 Agent
@@ -535,6 +544,69 @@ const handleResponse = async (
   },
 }
 ```
+
+### 3.5 代码复用设计
+
+为了减少重复代码，项目封装了 `base.ts` 提供公共函数：
+
+```typescript
+// src/services/doubao/agents/base.ts
+
+// 格式化记忆列表
+export const formatMemories = (memories: Memory[]): string => {
+  if (memories.length === 0) return "（暂无记忆）";
+  return memories.map((m) => `【${m.date}】${m.content}`).join("\n");
+};
+
+// 格式化聊天记录（带时间）
+export const formatRecords = (records: ChatRecord[]): string => {
+  if (records.length === 0) return "（暂无记录）";
+  return records
+    .map((r) => `[${r.createdAt}] ${r.type === "user" ? "用户" : "AI"}：${r.content}`)
+    .join("\n");
+};
+
+// 创建 JSON Schema
+export const createTextFormat = (name, properties, required) => ({...});
+
+// 通用 JSON 解析器
+export const parseJsonResult = <T>(text, defaultValue, errorPrefix): T => {...};
+```
+
+所有 Agent（brain、neural、proactive、memory）都复用这些函数，保持代码一致性。
+
+### 3.6 主动联系 Agent
+
+除了被动响应，机器人还能主动发起对话：
+
+```typescript
+// src/services/doubao/agents/proactive.ts
+export const proactiveAgent = async (
+  records: ChatRecord[],
+  memories: Memory[],
+): Promise<ProactiveResult> => {
+  const messages: Message[] = [
+    { role: "system", content: PROACTIVE_AGENT_PROMPT },
+    {
+      role: "user",
+      content: [
+        `【历史记忆】\n${formatMemories(memories)}`,
+        `【近期聊天记录】\n${formatRecords(records)}`,
+      ].join("\n\n"),
+    },
+  ];
+  // ...
+};
+```
+
+**智能决策原则**：
+
+- 根据聊天记录时间判断沉默时长
+- 今天已经主动发过消息，通常选择沉默
+- 深夜（22:00-8:00）不要发消息
+- 没有合适的话题或理由，选择沉默
+
+这样可以避免过度打扰用户，只在合适时机主动联系。
 
 ## 四、记忆系统：让 AI 拥有长期记忆
 

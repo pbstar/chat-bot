@@ -138,12 +138,16 @@ chat-bot/
 │   │   ├── doubao/
 │   │   │   ├── index.ts            # AI 对话核心（chat 函数 + 工具调用循环）
 │   │   │   ├── agents/
+│   │   │   │   ├── base.ts         # Agent 公共函数封装（格式化、JSON解析等）
 │   │   │   │   ├── brain.ts        # 大脑 Agent（携带记忆+工具的复杂处理）
 │   │   │   │   ├── neural.ts       # 中枢神经 Agent（快速判断，无记忆工具）
+│   │   │   │   ├── proactive.ts    # 主动联系 Agent（智能决策是否发消息）
 │   │   │   │   └── memory.ts       # 记忆生成 Agent（日记忆 / 月记忆）
 │   │   │   ├── prompts/
+│   │   │   │   ├── common.ts       # 公共提示词（角色设定、限制事项）
 │   │   │   │   ├── brain.ts        # 大脑 Agent 系统提示词
 │   │   │   │   ├── neural.ts       # 中枢神经 Agent 系统提示词
+│   │   │   │   ├── proactive.ts    # 主动联系 Agent 系统提示词
 │   │   │   │   └── memory.ts       # 记忆生成提示词
 │   │   │   └── tools/
 │   │   │       └── index.ts        # 工具函数实现（搜索、记录查询、发起会话）
@@ -317,7 +321,7 @@ chat({
 
 ---
 
-### 双 Agent 路由机制
+### 三 Agent 路由机制
 
 #### 中枢神经 Agent（`src/services/doubao/agents/neural.ts`）
 
@@ -391,6 +395,61 @@ AI：你好！有什么我可以帮你的吗？
 
 - **`dayMemoryAgent(records)`**：将一天的聊天记录总结为简洁的日记忆文本
 - **`monthMemoryAgent(memories)`**：将一个月的日记忆汇总为月度总结
+
+---
+
+#### 主动联系 Agent（`src/services/doubao/agents/proactive.ts`）
+
+**定位：** 智能决策是否主动发起对话，避免骚扰用户。
+
+**触发时机：** 心跳机制每 2 秒检查，随机间隔 20-50 分钟触发一次主动联系检查。
+
+**输入：**
+
+```typescript
+proactiveAgent(
+  records: ChatRecord[], // 近期聊天记录（含时间信息）
+  memories: Memory[],    // 全部历史记忆
+)
+```
+
+**输出（结构化 JSON）：**
+
+```typescript
+interface ProactiveResult {
+  action: "speak" | "silent"; // speak 表示发消息，silent 表示沉默
+  messages: string[]; // 消息内容数组
+}
+```
+
+**智能决策原则**：
+
+- 根据聊天记录中的时间戳判断沉默时长
+- 今天已经主动发过消息，通常选择沉默
+- 深夜（22:00-8:00）不要发消息
+- 沉默时间很短（几小时内），选择沉默
+- 用户正在活跃聊天中，选择沉默
+- 没有合适的话题或理由，选择沉默
+
+**工具使用**：
+
+- `get_baidu_search`：搜索今日热点新闻作为话题
+- `search_chat_records`：查找以前聊过的话题续集
+- 也可以不用工具，直接从记忆或感受出发
+
+---
+
+#### Agent 公共函数（`src/services/doubao/agents/base.ts`）
+
+为减少重复代码，封装了公共函数供所有 Agent 复用：
+
+| 函数名                | 功能                           |
+| --------------------- | ------------------------------ |
+| `formatMemories`      | 格式化记忆列表                 |
+| `formatRecords`       | 格式化聊天记录（带时间）       |
+| `formatRecordsSimple` | 格式化聊天记录（不带时间）     |
+| `createTextFormat`    | 创建 JSON Schema（结构化输出） |
+| `parseJsonResult`     | 通用 JSON 解析器（带错误处理） |
 
 ---
 

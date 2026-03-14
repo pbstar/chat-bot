@@ -3,29 +3,10 @@ import {
   DAY_MEMORY_PROMPT,
   MONTH_MEMORY_PROMPT,
 } from "@/services/doubao/prompts/memory";
+import { formatMemories, formatRecordsSimple } from "./base";
 import type { Message } from "@/types/common";
 import type { ChatRecord } from "@/db/record";
 import type { Memory } from "@/db/memory";
-
-// 将聊天记录格式化为文本
-const formatRecords = (records: ChatRecord[]): string => {
-  return records
-    .map((r) => {
-      const label =
-        r.type === "user"
-          ? r.groupId && r.userName
-            ? r.userName
-            : "用户"
-          : "AI";
-      return `${label}：${r.content}`;
-    })
-    .join("\n");
-};
-
-// 将日记忆格式化为文本
-const formatMemories = (memories: Memory[]): string => {
-  return memories.map((m) => `【${m.date}】${m.content}`).join("\n");
-};
 
 // 日记忆生成 Agent
 export const dayMemoryAgent = async (
@@ -33,7 +14,7 @@ export const dayMemoryAgent = async (
 ): Promise<string> => {
   const messages: Message[] = [
     { role: "system", content: DAY_MEMORY_PROMPT },
-    { role: "user", content: `【聊天记录】\n${formatRecords(records)}` },
+    { role: "user", content: `【聊天记录】\n${formatRecordsSimple(records)}` },
   ];
   return chat({ messages });
 };
