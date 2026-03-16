@@ -49,6 +49,7 @@ const parseResult = (text: string): ProactiveResult => {
 
 // 主动联系 Agent
 export const proactiveAgent = async (
+  dayTime: string,
   records: ChatRecord[],
   memories: Memory[],
 ): Promise<ProactiveResult> => {
@@ -57,6 +58,7 @@ export const proactiveAgent = async (
     {
       role: "user",
       content: [
+        `【当前时间】${dayTime}`,
         `【历史记忆】\n${formatMemories(memories)}`,
         `【近期聊天记录】\n${formatRecords(records)}`,
       ].join("\n\n"),

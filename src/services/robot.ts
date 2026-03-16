@@ -114,9 +114,10 @@ const handleInfo = (info: Info[], infoSet: Set<Info>) => {
 const checkProactive = async () => {
   const records = recordStore.getByUserId(ADMIN_ID);
   const memories = memoryStore.getAll();
+  const dayTime = dayjs().format("YYYY-MM-DD HH:mm:ss");
 
   try {
-    const result = await proactiveAgent(records, memories);
+    const result = await proactiveAgent(dayTime, records, memories);
     if (result.action === "silent") {
       console.log("[机器人] 主动联系：选择沉默");
       return;
