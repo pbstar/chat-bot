@@ -1,10 +1,6 @@
 import { chat } from "@/services/doubao";
 import { BRAIN_AGENT_PROMPT } from "@/services/doubao/prompts/brain";
-import {
-  get_baidu_search,
-  search_chat_records,
-  speak_to_user,
-} from "@/services/doubao/tools";
+import { get_baidu_search, search_chat_records } from "@/services/doubao/tools";
 import {
   formatMemories,
   formatRecords,
@@ -57,7 +53,7 @@ export const brainAgent = async (
     },
   ];
 
-  // 定义工具：百度搜索、聊天记录查询、发起会话
+  // 定义工具：百度搜索、聊天记录查询
   const tools: Tool[] = [
     {
       type: "function",
@@ -107,34 +103,6 @@ export const brainAgent = async (
           return "未找到相关聊天记录";
         }
         return `找到 ${results.length} 条相关聊天记录:\n${formatRecordsSimple(results)}`;
-      },
-    },
-    {
-      type: "function",
-      name: "speak_to_user",
-      description:
-        "发起会话，用于让AI主动发起对话。当用户说'五分钟后提醒我做某事'之类的要求时使用，请根据用户要求设置延迟时间",
-      parameters: {
-        type: "object",
-        properties: {
-          message: {
-            type: "string",
-            description: "会话内容",
-          },
-          delay_ms: {
-            type: "number",
-            description: "延迟时间（毫秒）",
-          },
-        },
-        required: ["message", "delay_ms"],
-      },
-      handler: async (args: string) => {
-        const { message, delay_ms } = JSON.parse(args) as {
-          message: string;
-          delay_ms: number;
-        };
-        speak_to_user(message, delay_ms);
-        return "会话已发起";
       },
     },
   ];
