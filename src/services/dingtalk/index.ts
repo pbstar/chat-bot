@@ -9,7 +9,8 @@ if (!clientId || !clientSecret) {
   throw new Error("DINGTALK_CLIENT_ID 或 DINGTALK_CLIENT_SECRET 未配置");
 }
 const client = new DWClient({ clientId, clientSecret });
-let send: (message: string) => void;
+// 未连上前不抛错，避免 async 回调里未捕获拒绝拖垮进程
+let send: (message: string) => void = () => {};
 
 // 使用 registerCallbackListener 接收消息，但手动发送确认响应
 client.registerCallbackListener(TOPIC_ROBOT, async (event) => {
@@ -71,7 +72,17 @@ function initDingtalk(sendFn: (message: string) => void) {
       console.log("✅ 钉钉机器人已启动");
       send = sendFn;
     })
-    .catch(console.error);
+    .catch((err: unknown) => {
+      const res =
+        err !== null && typeof err === "object" && "response" in err
+          ? (err as { response?: { status?: number; data?: unknown } }).response
+          : undefined;
+      console.error(
+        "[钉钉] 连接失败",
+        res?.status,
+        res?.data ?? (err instanceof Error ? err.message : err),
+      );
+    });
 }
 
 export { initDingtalk };
